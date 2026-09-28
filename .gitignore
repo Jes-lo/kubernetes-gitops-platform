@@ -1,0 +1,34 @@
+# Node.js
+node_modules/
+npm-debug.log*
+
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Kubernetes / local
+*.kubeconfig
+
+# Environment files
+.env
+.env.*
+
+# Generated artifacts
+dist/
+coverage/
+reports/
+*.tar
+*.tgz
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
