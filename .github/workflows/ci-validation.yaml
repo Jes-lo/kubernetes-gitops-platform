@@ -368,6 +368,126 @@ jobs:
         run: |
           docker rm -f demo-api-ci 2>/dev/null || true
 
+  strimzi-operator:
+    name: Strimzi Operator Validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Show Helm version
+        shell: bash
+        run: |
+          set -euo pipefail
+          helm version --short
+
+      - name: Validate Strimzi GitOps configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APPLICATION="gitops/applications/strimzi-operator.yaml"
+          OPERATOR_PROJECT="gitops/projects/strimzi-operator.yaml"
+          WORKLOAD_PROJECT="gitops/projects/kafka-platform.yaml"
+
+          test -f "$APPLICATION"
+          test -f "$OPERATOR_PROJECT"
+          test -f "$WORKLOAD_PROJECT"
+
+          grep -q "^  project: strimzi-operator$" "$APPLICATION"
+          grep -q "repoURL: https://strimzi.io/charts/" "$APPLICATION"
+          grep -q "chart: strimzi-kafka-operator" "$APPLICATION"
+          grep -q "targetRevision: 1.2.0" "$APPLICATION"
+          grep -q "name: watchAnyNamespace" "$APPLICATION"
+          grep -q "value: \"false\"" "$APPLICATION"
+          grep -q "namespace: platform-kafka" "$APPLICATION"
+          grep -q "CreateNamespace=true" "$APPLICATION"
+          grep -q "ServerSideApply=true" "$APPLICATION"
+          grep -q "prune: true" "$APPLICATION"
+          grep -q "selfHeal: true" "$APPLICATION"
+
+          grep -q "https://strimzi.io/charts/" "$OPERATOR_PROJECT"
+
+          if grep -q "git@github.com:Jes-lo/kubernetes-gitops-platform.git" "$OPERATOR_PROJECT"; then
+            echo "::error::Operator project must not allow the workload Git repository"
+            exit 1
+          fi
+
+          grep -q "kind: Namespace$" "$OPERATOR_PROJECT"
+          grep -q "name: platform-kafka$" "$OPERATOR_PROJECT"
+          grep -q "kind: CustomResourceDefinition$" "$OPERATOR_PROJECT"
+          grep -q "kind: ClusterRole$" "$OPERATOR_PROJECT"
+          grep -q "kind: ClusterRoleBinding$" "$OPERATOR_PROJECT"
+          grep -q "kind: ConfigMap$" "$OPERATOR_PROJECT"
+          grep -q "kind: ServiceAccount$" "$OPERATOR_PROJECT"
+          grep -q "kind: RoleBinding$" "$OPERATOR_PROJECT"
+          grep -q "kind: Deployment$" "$OPERATOR_PROJECT"
+
+          grep -q "git@github.com:Jes-lo/kubernetes-gitops-platform.git" "$WORKLOAD_PROJECT"
+
+          if grep -q "https://strimzi.io/charts/" "$WORKLOAD_PROJECT"; then
+            echo "::error::Kafka workload project must not allow the Strimzi Helm repository"
+            exit 1
+          fi
+
+          if grep -q "clusterResourceWhitelist:" "$WORKLOAD_PROJECT"; then
+            echo "::error::Kafka workload project must not have cluster-scoped permissions"
+            exit 1
+          fi
+
+          grep -q "kind: Kafka$" "$WORKLOAD_PROJECT"
+          grep -q "kind: KafkaNodePool$" "$WORKLOAD_PROJECT"
+          grep -q "kind: KafkaTopic$" "$WORKLOAD_PROJECT"
+
+          for PROJECT in "$OPERATOR_PROJECT" "$WORKLOAD_PROJECT"; do
+            if grep -Eq "group:[[:space:]]*[\"']?\*|kind:[[:space:]]*[\"']?\*" "$PROJECT"; then
+              echo "::error::Wildcard AppProject resource permission detected in $PROJECT"
+              exit 1
+            fi
+
+            if grep -q "kind: Secret$" "$PROJECT"; then
+              echo "::error::AppProject must not directly whitelist Secret resources"
+              exit 1
+            fi
+          done
+
+          echo "PASS: Strimzi AppProject isolation validated"
+
+      - name: Validate pinned Strimzi chart
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          helm repo add strimzi https://strimzi.io/charts/
+          helm repo update
+
+          helm template \
+            strimzi-operator \
+            strimzi/strimzi-kafka-operator \
+            --version 1.2.0 \
+            --namespace platform-kafka \
+            --set watchAnyNamespace=false \
+            --include-crds \
+            > /tmp/strimzi-rendered.yaml
+
+          test "$(grep -c "^kind: CustomResourceDefinition$" /tmp/strimzi-rendered.yaml)" -eq 10
+          test "$(grep -c "^kind: ClusterRole$" /tmp/strimzi-rendered.yaml)" -eq 7
+          test "$(grep -c "^kind: ClusterRoleBinding$" /tmp/strimzi-rendered.yaml)" -eq 3
+          test "$(grep -c "^kind: RoleBinding$" /tmp/strimzi-rendered.yaml)" -eq 4
+          test "$(grep -c "^kind: Deployment$" /tmp/strimzi-rendered.yaml)" -eq 1
+          test "$(grep -c "^kind: ServiceAccount$" /tmp/strimzi-rendered.yaml)" -eq 1
+          test "$(grep -c "^kind: ConfigMap$" /tmp/strimzi-rendered.yaml)" -eq 1
+
+          grep -q "name: kafkas.kafka.strimzi.io" /tmp/strimzi-rendered.yaml
+          grep -q "name: kafkanodepools.kafka.strimzi.io" /tmp/strimzi-rendered.yaml
+          grep -q "name: kafkatopics.kafka.strimzi.io" /tmp/strimzi-rendered.yaml
+
+          echo "PASS: pinned Strimzi 1.2.0 chart validated"
+
   security:
     name: Security Validation
     runs-on: ubuntu-24.04
