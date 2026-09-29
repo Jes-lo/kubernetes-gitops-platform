@@ -1,0 +1,10 @@
+replicaCount: 2
+
+image:
+  repository: ghcr.io/jes-lo/kubernetes-gitops-platform-demo-api
+  tag: ""
+  digest: sha256:d6fc29d05e268a9052c36d5ced37927c61b124e9b7c3aabd76e8444296bfbdb4
+  pullPolicy: IfNotPresent
+
+imagePullSecrets:
+  - name: ghcr-read

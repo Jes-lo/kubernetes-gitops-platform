@@ -27,6 +27,10 @@ spec:
     spec:
       serviceAccountName: {{ default (include "demo-api.fullname" .) .Values.serviceAccount.name }}
       automountServiceAccountToken: false
+{{ with .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{ toYaml . | indent 8 }}
+{{ end }}
       terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
 
       securityContext:
@@ -34,7 +38,11 @@ spec:
 
       containers:
         - name: demo-api
+{{ if .Values.image.digest }}
+          image: "{{ .Values.image.repository }}@{{ .Values.image.digest }}"
+{{ else }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+{{ end }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
 
           env:

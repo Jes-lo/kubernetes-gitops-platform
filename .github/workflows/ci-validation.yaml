@@ -259,6 +259,109 @@ jobs:
           grep -q 'readOnlyRootFilesystem: true' /tmp/demo-api-rendered.yaml
           grep -q 'allowPrivilegeEscalation: false' /tmp/demo-api-rendered.yaml
 
+      - name: Validate GitOps delivery configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          DEV_VALUES="gitops/environments/dev/demo-api/values.yaml"
+          APPLICATION="gitops/applications/demo-api.yaml"
+          PROJECT="gitops/projects/demo-platform.yaml"
+
+          test -f "$DEV_VALUES"
+          test -f "$APPLICATION"
+          test -f "$PROJECT"
+
+          (
+            cd charts/demo-api
+            helm lint . -f ../../gitops/environments/dev/demo-api/values.yaml
+            helm template demo-api . --namespace demo-dev -f ../../gitops/environments/dev/demo-api/values.yaml > /tmp/demo-api-dev-rendered.yaml
+          )
+
+          IMAGE="$(
+            awk '/^[[:space:]]*image:/ {
+              gsub(/"/, "", $2)
+              print $2
+              exit
+            }' /tmp/demo-api-dev-rendered.yaml
+          )"
+
+          case "$IMAGE" in
+            ghcr.io/jes-lo/kubernetes-gitops-platform-demo-api@sha256:*)
+              ;;
+            *)
+              echo "::error::Dev workload is not digest-pinned: $IMAGE"
+              exit 1
+              ;;
+          esac
+
+          DIGEST="${IMAGE##*@sha256:}"
+
+          if ! printf '%s' "$DIGEST" | grep -Eq '^[0-9a-f]{64}$'; then
+            echo "::error::Invalid SHA256 image digest: $DIGEST"
+            exit 1
+          fi
+
+          if grep -q ':latest' /tmp/demo-api-dev-rendered.yaml; then
+            echo "::error::Floating latest tag detected"
+            exit 1
+          fi
+
+          grep -q 'imagePullSecrets:' /tmp/demo-api-dev-rendered.yaml
+          grep -q -- '- name: ghcr-read' /tmp/demo-api-dev-rendered.yaml
+
+          grep -q 'runAsNonRoot: true' /tmp/demo-api-dev-rendered.yaml
+          grep -q 'readOnlyRootFilesystem: true' /tmp/demo-api-dev-rendered.yaml
+          grep -q 'allowPrivilegeEscalation: false' /tmp/demo-api-dev-rendered.yaml
+
+          grep -q 'repoURL: git@github.com:Jes-lo/kubernetes-gitops-platform.git' "$APPLICATION"
+          grep -q 'targetRevision: main' "$APPLICATION"
+          grep -q 'path: charts/demo-api' "$APPLICATION"
+          grep -q '../../gitops/environments/dev/demo-api/values.yaml' "$APPLICATION"
+          grep -q 'server: https://kubernetes.default.svc' "$APPLICATION"
+          grep -q 'namespace: demo-dev' "$APPLICATION"
+          grep -q 'prune: true' "$APPLICATION"
+          grep -q 'selfHeal: true' "$APPLICATION"
+
+          grep -q 'kind: Service$' "$PROJECT"
+          grep -q 'kind: ServiceAccount$' "$PROJECT"
+          grep -q 'kind: Deployment$' "$PROJECT"
+
+          if grep -q 'kind: Secret$' "$PROJECT"; then
+            echo "::error::AppProject must not whitelist Secret resources"
+            exit 1
+          fi
+
+          set +e
+          CREDENTIAL_SCAN_PATHS=(
+            gitops/environments/dev/demo-api
+            gitops/applications/demo-api.yaml
+            charts/demo-api
+          )
+
+          grep -RniE \
+            'ghp_|github_pat_|\.dockerconfigjson|^[[:space:]]*auths:' \
+            "${CREDENTIAL_SCAN_PATHS[@]}"
+          CREDENTIAL_SCAN_EXIT=$?
+          set -e
+
+          case "$CREDENTIAL_SCAN_EXIT" in
+            0)
+              echo "::error::Possible registry credential material detected"
+              exit 1
+              ;;
+            1)
+              echo "PASS: no registry credential material detected"
+              ;;
+            *)
+              echo "::error::Credential scan failed with exit code ${CREDENTIAL_SCAN_EXIT}"
+              exit "$CREDENTIAL_SCAN_EXIT"
+              ;;
+          esac
+
+          echo "Validated dev image: $IMAGE"
+          echo "PASS: GitOps delivery configuration validated"
+
       - name: Clean up test container
         if: always()
         shell: bash
