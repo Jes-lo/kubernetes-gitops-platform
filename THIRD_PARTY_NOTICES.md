@@ -19,6 +19,10 @@ holders and are subject to their respective licenses and terms.
 | Terraform Helm Provider | v3.3.0 | Helm release management during bootstrap | MPL-2.0 |
 | Argo CD | v3.5.3 | GitOps reconciliation and continuous delivery | Apache-2.0 |
 | Argo CD Helm Chart | 10.9.2 | Argo CD installation | Apache-2.0 |
+| actions/checkout | v7.0.1 | GitHub Actions repository checkout | MIT |
+| hashicorp/setup-terraform | v4.0.1 | Terraform setup in CI | MPL-2.0 |
+| Aqua Security Trivy Action | v0.36.0 | Security scanning in CI | Apache-2.0 |
+| Aqua Security Trivy | v0.74.0 | IaC misconfiguration and secret scanning | Apache-2.0 |
 
 Docker and Docker Desktop are used as external local development/runtime
 tooling and remain subject to Docker's applicable licenses and terms.
