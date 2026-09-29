@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: demo-platform
+  namespace: argocd
+spec:
+  description: Restricted project for the development demonstration workload.
+
+  sourceRepos:
+    - git@github.com:Jes-lo/kubernetes-gitops-platform.git
+
+  destinations:
+    - namespace: demo-dev
+      server: https://kubernetes.default.svc
+
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+      name: demo-dev
+
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: ConfigMap
