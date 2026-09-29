@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: kafka-platform
+  namespace: argocd
+spec:
+  description: GitOps project for Kafka platform workloads managed by Strimzi
+
+  sourceRepos:
+    - git@github.com:Jes-lo/kubernetes-gitops-platform.git
+
+  destinations:
+    - namespace: platform-kafka
+      server: https://kubernetes.default.svc
+
+  namespaceResourceWhitelist:
+    - group: kafka.strimzi.io
+      kind: Kafka
+    - group: kafka.strimzi.io
+      kind: KafkaNodePool
+    - group: kafka.strimzi.io
+      kind: KafkaTopic
