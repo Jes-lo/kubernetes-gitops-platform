@@ -100,6 +100,171 @@ jobs:
 
           echo "No Terraform state or plan artifacts are tracked."
 
+  demo-api:
+    name: Demo API Validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Show validation tool versions
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker --version
+          helm version --short
+
+      - name: Validate pinned Node base image
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          NODE_BASE_IMAGE="$(
+            awk '/^FROM / {print $2; exit}' app/demo-api/Dockerfile
+          )"
+
+          case "$NODE_BASE_IMAGE" in
+            node@sha256:*)
+              echo "Pinned base image: $NODE_BASE_IMAGE"
+              ;;
+            *)
+              echo "::error::Dockerfile base image must be pinned by digest."
+              exit 1
+              ;;
+          esac
+
+          echo "NODE_BASE_IMAGE=$NODE_BASE_IMAGE" >> "$GITHUB_ENV"
+
+      - name: Run unit tests with pinned Node image
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker pull "$NODE_BASE_IMAGE"
+
+          docker run             --rm             --user 1000:1000             --volume "$PWD/app/demo-api:/workspace:ro"             --workdir /workspace             "$NODE_BASE_IMAGE"             node --test
+
+      - name: Build demo API image
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker build             --pull=false             --tag demo-api:ci             app/demo-api
+
+          IMAGE_USER="$(
+            docker image inspect               demo-api:ci               --format '{{.Config.User}}'
+          )"
+
+          if [ "$IMAGE_USER" != "node" ]; then
+            echo "::error::Runtime image user is '$IMAGE_USER', expected 'node'."
+            exit 1
+          fi
+
+          echo "Runtime image user: $IMAGE_USER"
+
+      - name: Run hardened container smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker run             --detach             --name demo-api-ci             --read-only             --user 1000:1000             --cap-drop ALL             --security-opt no-new-privileges:true             --publish 127.0.0.1:3002:3000             --env APP_VERSION=ci             demo-api:ci
+
+          READY=false
+
+          for attempt in $(seq 1 20); do
+            if curl               --fail               --silent               http://127.0.0.1:3002/readyz               >/dev/null
+            then
+              READY=true
+              break
+            fi
+
+            sleep 1
+          done
+
+          if [ "$READY" != "true" ]; then
+            echo "::error::demo-api did not become ready."
+            docker logs demo-api-ci
+            exit 1
+          fi
+
+          curl --fail --silent http://127.0.0.1:3002/
+          echo
+          curl --fail --silent http://127.0.0.1:3002/healthz
+          echo
+          curl --fail --silent http://127.0.0.1:3002/readyz
+          echo
+          curl --fail --silent http://127.0.0.1:3002/version
+          echo
+
+      - name: Validate container security
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          IDENTITY="$(docker exec demo-api-ci id)"
+          PROCESS_SECURITY="$(
+            docker exec demo-api-ci               sh -c 'grep -E "^(Uid|Gid|CapEff|NoNewPrivs|Seccomp):" /proc/1/status'
+          )"
+
+          echo "$IDENTITY"
+          echo "$PROCESS_SECURITY"
+
+          echo "$IDENTITY"             | grep -q 'uid=1000(node) gid=1000(node)'
+
+          echo "$PROCESS_SECURITY"             | grep -q '^CapEff:[[:space:]]*0000000000000000$'
+
+          echo "$PROCESS_SECURITY"             | grep -q '^NoNewPrivs:[[:space:]]*1$'
+
+          echo "$PROCESS_SECURITY" \
+            | grep -q '^Seccomp:[[:space:]]*2$'
+
+          set +e
+
+          docker exec             demo-api-ci             sh -c 'touch /app/ci-write-test'             >/tmp/write-test.out 2>&1
+
+          WRITE_EXIT=$?
+
+          set -e
+
+          cat /tmp/write-test.out
+
+          if [ "$WRITE_EXIT" -eq 0 ]; then
+            echo "::error::Container root filesystem is writable."
+            exit 1
+          fi
+
+          echo "Read-only root filesystem confirmed."
+
+      - name: Validate Helm chart
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          helm lint charts/demo-api
+
+          helm template             demo-api             charts/demo-api             --namespace demo-dev             > /tmp/demo-api-rendered.yaml
+
+          grep -q '^kind: ServiceAccount$' /tmp/demo-api-rendered.yaml
+          grep -q '^kind: Service$' /tmp/demo-api-rendered.yaml
+          grep -q '^kind: Deployment$' /tmp/demo-api-rendered.yaml
+
+          grep -q 'runAsNonRoot: true' /tmp/demo-api-rendered.yaml
+          grep -q 'runAsUser: 1000' /tmp/demo-api-rendered.yaml
+          grep -q 'runAsGroup: 1000' /tmp/demo-api-rendered.yaml
+          grep -q 'readOnlyRootFilesystem: true' /tmp/demo-api-rendered.yaml
+          grep -q 'allowPrivilegeEscalation: false' /tmp/demo-api-rendered.yaml
+
+      - name: Clean up test container
+        if: always()
+        shell: bash
+        run: |
+          docker rm -f demo-api-ci 2>/dev/null || true
+
   security:
     name: Security Validation
     runs-on: ubuntu-24.04

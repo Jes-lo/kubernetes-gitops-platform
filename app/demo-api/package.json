@@ -1,0 +1,14 @@
+{
+  "name": "kubernetes-gitops-demo-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal API workload for the Kubernetes GitOps Platform portfolio project.",
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test"
+  }
+}
