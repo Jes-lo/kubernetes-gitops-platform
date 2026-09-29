@@ -32,3 +32,6 @@ reports/
 Thumbs.db
 .vscode/
 .idea/
+
+# Terraform plan files without extension
+tfplan
