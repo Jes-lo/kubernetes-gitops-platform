@@ -1,17 +1,49 @@
 # Third-Party Notices
 
-This project uses third-party software and services as part of its development,
-validation, and runtime environment.
+This project uses third-party software, tools, libraries, container images,
+and services as part of its development, bootstrap, validation, and runtime
+environment.
 
-Third-party software remains subject to the licenses and intellectual property
-rights of its respective owners.
+Third-party components remain the property of their respective copyright
+holders and are subject to their respective licenses and terms.
 
-This repository does not claim ownership of Kubernetes, kind, Terraform,
-Argo CD, Helm, Docker, Strimzi, Kafka, GitHub Actions, GHCR, or other
-third-party technologies used by the project.
+## Components Currently Used
 
-Specific versions and relevant licensing information will be documented as
-components are introduced into the implementation.
+| Component | Version / Reference | Project Use | License |
+|---|---|---|---|
+| Kubernetes | v1.36.4 | Local Kubernetes platform | Apache-2.0 |
+| kind | v0.33.0 | Local Kubernetes cluster lifecycle | Apache-2.0 |
+| Helm | v4.3.0 | Kubernetes package management | Apache-2.0 |
+| Terraform | v1.16.4 | Platform bootstrap Infrastructure as Code | BUSL-1.1 |
+| Terraform Kubernetes Provider | v3.2.1 | Kubernetes bootstrap resources | MPL-2.0 |
+| Terraform Helm Provider | v3.3.0 | Helm release management during bootstrap | MPL-2.0 |
+| Argo CD | v3.5.3 | GitOps reconciliation and continuous delivery | Apache-2.0 |
+| Argo CD Helm Chart | 10.9.2 | Argo CD installation | Apache-2.0 |
 
-No third-party source code is intentionally vendored into this repository
-unless explicitly documented.
+Docker and Docker Desktop are used as external local development/runtime
+tooling and remain subject to Docker's applicable licenses and terms.
+
+## Repository-Owned Material
+
+Repository-specific source code, Infrastructure as Code, Kubernetes
+configuration, Helm packaging, automation, documentation, tests, diagrams,
+architecture decisions, and integrations are created specifically for this
+portfolio project unless otherwise identified as third-party material.
+
+The repository does not claim ownership of Kubernetes, kind, Helm, Terraform,
+Argo CD, Docker, or any other third-party technology used by the project.
+
+Third-party names and trademarks are used only for identification,
+interoperability, documentation, and description of the technologies used.
+
+## Third-Party Source Code
+
+No third-party source code is intentionally copied or vendored into this
+repository unless explicitly documented.
+
+Dependencies downloaded by package managers, Terraform providers, container
+images, Helm charts, and other externally distributed artifacts remain subject
+to their original licenses and terms.
+
+Additional third-party components will be documented here as they are
+introduced into the project.
