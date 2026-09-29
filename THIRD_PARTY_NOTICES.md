@@ -29,6 +29,9 @@ holders and are subject to their respective licenses and terms.
 Docker and Docker Desktop are used as external local development/runtime
 tooling and remain subject to Docker's applicable licenses and terms.
 
+GitHub Container Registry (GHCR) is used as an external container registry
+service and remains subject to GitHub's applicable terms and policies.
+
 ## Repository-Owned Material
 
 Repository-specific source code, Infrastructure as Code, Kubernetes

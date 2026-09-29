@@ -1,0 +1,176 @@
+name: Image Publish
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - app/demo-api/**
+      - .github/workflows/image-publish.yaml
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: image-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: jes-lo/kubernetes-gitops-platform-demo-api
+
+jobs:
+  publish-demo-api:
+    name: Publish Demo API Image
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate immutable base image
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BASE_IMAGE="$(
+            awk '/^FROM / {print $2; exit}' app/demo-api/Dockerfile
+          )"
+
+          case "$BASE_IMAGE" in
+            node@sha256:*)
+              echo "Pinned base image: $BASE_IMAGE"
+              ;;
+            *)
+              echo "::error::Dockerfile base image must be pinned by digest."
+              exit 1
+              ;;
+          esac
+
+      - name: Define immutable image reference
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          IMAGE_REF="${REGISTRY}/${IMAGE_NAME}:${GITHUB_SHA}"
+
+          echo "IMAGE_REF=${IMAGE_REF}" >> "$GITHUB_ENV"
+          echo "Image reference: ${IMAGE_REF}"
+
+      - name: Build image
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker build \
+            --pull=false \
+            --tag "$IMAGE_REF" \
+            --label "org.opencontainers.image.revision=${GITHUB_SHA}" \
+            app/demo-api
+
+      - name: Verify runtime image
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          IMAGE_USER="$(
+            docker image inspect               "$IMAGE_REF"               --format '{{.Config.User}}'
+          )"
+
+          SOURCE_LABEL="$(
+            docker image inspect               "$IMAGE_REF"               --format '{{index .Config.Labels "org.opencontainers.image.source"}}'
+          )"
+
+          REVISION_LABEL="$(
+            docker image inspect               "$IMAGE_REF"               --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
+          )"
+
+          EXPECTED_SOURCE="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"
+
+          if [ "$IMAGE_USER" != "node" ]; then
+            echo "::error::Runtime image user is '$IMAGE_USER', expected 'node'."
+            exit 1
+          fi
+
+          if [ "$SOURCE_LABEL" != "$EXPECTED_SOURCE" ]; then
+            echo "::error::Unexpected OCI source label: $SOURCE_LABEL"
+            exit 1
+          fi
+
+          if [ "$REVISION_LABEL" != "$GITHUB_SHA" ]; then
+            echo "::error::Unexpected OCI revision label: $REVISION_LABEL"
+            exit 1
+          fi
+
+          echo "Runtime image user: $IMAGE_USER"
+          echo "OCI source: $SOURCE_LABEL"
+          echo "OCI revision: $REVISION_LABEL"
+
+      - name: Log in to GitHub Container Registry
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          printf '%s' "$GHCR_TOKEN" \
+            | docker login \
+                "$REGISTRY" \
+                --username "${{ github.actor }}" \
+                --password-stdin
+
+      - name: Push immutable image
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker push "$IMAGE_REF"
+
+      - name: Resolve published digest
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker pull "$IMAGE_REF"
+
+          REPO_DIGEST="$(
+            docker image inspect \
+              "$IMAGE_REF" \
+              --format '{{index .RepoDigests 0}}'
+          )"
+
+          case "$REPO_DIGEST" in
+            "${REGISTRY}/${IMAGE_NAME}@sha256:"*)
+              ;;
+            *)
+              echo "::error::Unexpected repository digest: $REPO_DIGEST"
+              exit 1
+              ;;
+          esac
+
+          echo "Published image: $IMAGE_REF"
+          echo "Published digest: $REPO_DIGEST"
+
+          {
+            echo "## Demo API container image"
+            echo
+            echo "\`$IMAGE_REF\`"
+            echo
+            echo "\`$REPO_DIGEST\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Log out from GitHub Container Registry
+        if: always()
+        shell: bash
+        run: |
+          docker logout "$REGISTRY" 2>/dev/null || true
