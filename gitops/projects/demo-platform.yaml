@@ -21,3 +21,9 @@ spec:
   namespaceResourceWhitelist:
     - group: ""
       kind: ConfigMap
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: ServiceAccount
+    - group: "apps"
+      kind: Deployment

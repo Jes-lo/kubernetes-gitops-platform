@@ -3,7 +3,10 @@ replicaCount: 2
 image:
   repository: demo-api
   tag: "0.1.0"
+  digest: ""
   pullPolicy: IfNotPresent
+
+imagePullSecrets: []
 
 serviceAccount:
   create: true
