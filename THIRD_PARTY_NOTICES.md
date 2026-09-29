@@ -23,6 +23,8 @@ holders and are subject to their respective licenses and terms.
 | hashicorp/setup-terraform | v4.0.1 | Terraform setup in CI | MPL-2.0 |
 | Aqua Security Trivy Action | v0.36.0 | Security scanning in CI | Apache-2.0 |
 | Aqua Security Trivy | v0.74.0 | IaC misconfiguration and secret scanning | Apache-2.0 |
+| Node.js | v24.21.0 LTS | Demo API runtime | MIT |
+| nodejs/docker-node | 24.21.0-bookworm-slim, digest-pinned | Demo API container base packaging | MIT |
 
 Docker and Docker Desktop are used as external local development/runtime
 tooling and remain subject to Docker's applicable licenses and terms.
