@@ -443,6 +443,7 @@ jobs:
           grep -q "kind: Kafka$" "$WORKLOAD_PROJECT"
           grep -q "kind: KafkaNodePool$" "$WORKLOAD_PROJECT"
           grep -q "kind: KafkaTopic$" "$WORKLOAD_PROJECT"
+          grep -q "kind: KafkaUser$" "$WORKLOAD_PROJECT"
 
           for PROJECT in "$OPERATOR_PROJECT" "$WORKLOAD_PROJECT"; do
             if grep -Eq "group:[[:space:]]*[\"']?\*|kind:[[:space:]]*[\"']?\*" "$PROJECT"; then
@@ -488,6 +489,156 @@ jobs:
           grep -q "name: kafkatopics.kafka.strimzi.io" /tmp/strimzi-rendered.yaml
 
           echo "PASS: pinned Strimzi 1.2.0 chart validated"
+
+
+  kafka-platform:
+    name: Kafka Platform Validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate Kafka GitOps configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APPLICATION="gitops/applications/kafka-platform.yaml"
+          PROJECT="gitops/projects/kafka-platform.yaml"
+          NODE_POOL="platform/kafka/kafka-node-pool.yaml"
+          KAFKA="platform/kafka/kafka.yaml"
+          TOPIC="platform/kafka/kafka-topic.yaml"
+          USER="platform/kafka/kafka-user.yaml"
+
+          for FILE in \
+            "$APPLICATION" \
+            "$PROJECT" \
+            "$NODE_POOL" \
+            "$KAFKA" \
+            "$TOPIC" \
+            "$USER"
+          do
+            test -f "$FILE"
+          done
+
+          # Argo CD project isolation.
+          grep -q "git@github.com:Jes-lo/kubernetes-gitops-platform.git" "$PROJECT"
+          grep -q "namespace: platform-kafka" "$PROJECT"
+
+          if grep -q "clusterResourceWhitelist:" "$PROJECT"; then
+            echo "::error::Kafka workload project must not have cluster-scoped permissions"
+            exit 1
+          fi
+
+          for KIND in Kafka KafkaNodePool KafkaTopic KafkaUser; do
+            grep -q "kind: ${KIND}$" "$PROJECT"
+          done
+
+          if grep -Eq "group:[[:space:]]*[\"']?\*|kind:[[:space:]]*[\"']?\*" "$PROJECT"; then
+            echo "::error::Wildcard AppProject resource permission detected"
+            exit 1
+          fi
+
+          if grep -q "kind: Secret$" "$PROJECT"; then
+            echo "::error::Kafka workload project must not directly whitelist Secrets"
+            exit 1
+          fi
+
+          # Argo CD Application must deploy only reviewed main content.
+          grep -q "^  project: kafka-platform$" "$APPLICATION"
+          grep -q "repoURL: git@github.com:Jes-lo/kubernetes-gitops-platform.git" "$APPLICATION"
+          grep -q "targetRevision: main" "$APPLICATION"
+          grep -q "path: platform/kafka" "$APPLICATION"
+          grep -q "namespace: platform-kafka" "$APPLICATION"
+          grep -q "prune: true" "$APPLICATION"
+          grep -q "selfHeal: true" "$APPLICATION"
+          grep -q "ApplyOutOfSyncOnly=true" "$APPLICATION"
+
+          if grep -q "CreateNamespace=true" "$APPLICATION"; then
+            echo "::error::Kafka Application must not own platform-kafka namespace creation"
+            exit 1
+          fi
+
+          # KafkaNodePool.
+          grep -q "^apiVersion: kafka.strimzi.io/v1$" "$NODE_POOL"
+          grep -q "^kind: KafkaNodePool$" "$NODE_POOL"
+          grep -q "name: dual-role" "$NODE_POOL"
+          grep -q "strimzi.io/cluster: platform-kafka" "$NODE_POOL"
+          grep -q "replicas: 3" "$NODE_POOL"
+          grep -q -- "- controller" "$NODE_POOL"
+          grep -q -- "- broker" "$NODE_POOL"
+          grep -q "type: jbod" "$NODE_POOL"
+          grep -q "id: 0" "$NODE_POOL"
+          grep -q "type: persistent-claim" "$NODE_POOL"
+          grep -q "size: 1Gi" "$NODE_POOL"
+          grep -q "class: standard" "$NODE_POOL"
+          grep -q "deleteClaim: false" "$NODE_POOL"
+          grep -q "kraftMetadata: shared" "$NODE_POOL"
+
+          # Kafka cluster security and durability.
+          grep -q "^apiVersion: kafka.strimzi.io/v1$" "$KAFKA"
+          grep -q "^kind: Kafka$" "$KAFKA"
+          grep -q "version: 4.3.1" "$KAFKA"
+          grep -q "metadataVersion: 4.3-IV0" "$KAFKA"
+          grep -q "type: internal" "$KAFKA"
+          grep -q "tls: true" "$KAFKA"
+          grep -q "type: tls" "$KAFKA"
+          grep -q "type: simple" "$KAFKA"
+          grep -q "offsets.topic.replication.factor: 3" "$KAFKA"
+          grep -q "transaction.state.log.replication.factor: 3" "$KAFKA"
+          grep -q "transaction.state.log.min.isr: 2" "$KAFKA"
+          grep -q "default.replication.factor: 3" "$KAFKA"
+          grep -q "min.insync.replicas: 2" "$KAFKA"
+          grep -q "topicOperator: {}" "$KAFKA"
+          grep -q "userOperator: {}" "$KAFKA"
+
+          if grep -Eq "type:[[:space:]]*(nodeport|loadbalancer|ingress|route)" "$KAFKA"; then
+            echo "::error::External Kafka listener detected"
+            exit 1
+          fi
+
+          # Topic.
+          grep -q "^kind: KafkaTopic$" "$TOPIC"
+          grep -q "name: platform-events" "$TOPIC"
+          grep -q "strimzi.io/cluster: platform-kafka" "$TOPIC"
+          grep -q "partitions: 3" "$TOPIC"
+          grep -q "replicas: 3" "$TOPIC"
+          grep -q "min.insync.replicas: 2" "$TOPIC"
+
+          # Least-privilege TLS user.
+          grep -q "^kind: KafkaUser$" "$USER"
+          grep -q "name: demo-client" "$USER"
+          grep -q "strimzi.io/cluster: platform-kafka" "$USER"
+          grep -q "type: tls" "$USER"
+          grep -q "type: simple" "$USER"
+          grep -q "name: platform-events" "$USER"
+          grep -q "name: demo-client" "$USER"
+          grep -q -- "- Read" "$USER"
+          grep -q -- "- Write" "$USER"
+          grep -q -- "- Describe" "$USER"
+          grep -q -- "- IdempotentWrite" "$USER"
+
+          if grep -Eq "^[[:space:]]*-[[:space:]]+All[[:space:]]*$" "$USER"; then
+            echo "::error::KafkaUser must not receive All permission"
+            exit 1
+          fi
+
+          if grep -Eq "name:[[:space:]]*[\"']?\*[\"']?[[:space:]]*$" "$USER"; then
+            echo "::error::Wildcard Kafka ACL resource detected"
+            exit 1
+          fi
+
+          # Runtime credentials must never be committed as manifests.
+          if grep -R -Eq "^[[:space:]]*kind:[[:space:]]*Secret[[:space:]]*$" platform/kafka; then
+            echo "::error::Secret manifest found under platform/kafka"
+            exit 1
+          fi
+
+          echo "PASS: Kafka platform GitOps configuration validated"
 
   security:
     name: Security Validation

@@ -20,3 +20,5 @@ spec:
       kind: KafkaNodePool
     - group: kafka.strimzi.io
       kind: KafkaTopic
+    - group: kafka.strimzi.io
+      kind: KafkaUser
