@@ -402,6 +402,7 @@ jobs:
           grep -q "repoURL: https://strimzi.io/charts/" "$APPLICATION"
           grep -q "chart: strimzi-kafka-operator" "$APPLICATION"
           grep -q "targetRevision: 1.2.0" "$APPLICATION"
+          grep -q "argocd.argoproj.io/compare-options: ServerSideDiff=true" "$APPLICATION"
           grep -q "name: watchAnyNamespace" "$APPLICATION"
           grep -q "value: \"false\"" "$APPLICATION"
           grep -q "namespace: platform-kafka" "$APPLICATION"
