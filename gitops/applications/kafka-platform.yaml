@@ -1,0 +1,23 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kafka-platform
+  namespace: argocd
+spec:
+  project: kafka-platform
+
+  source:
+    repoURL: git@github.com:Jes-lo/kubernetes-gitops-platform.git
+    targetRevision: main
+    path: platform/kafka
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: platform-kafka
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ApplyOutOfSyncOnly=true
