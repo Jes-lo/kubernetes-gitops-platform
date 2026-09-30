@@ -6,9 +6,15 @@ platform automation, and declarative operations.
 
 ## Project Status
 
-**Architecture and bootstrap phase**
+**Implemented local Kubernetes GitOps platform**
 
-The project is currently building the Kubernetes and GitOps foundation.
+The current development environment includes a reproducible kind cluster,
+Terraform-based Argo CD bootstrap, GitOps reconciliation, a containerized demo
+application delivered from GHCR, and a Strimzi-managed Kafka platform with TLS
+authentication and least-privilege authorization.
+
+The platform includes automated bootstrap, validation, credential-lifecycle,
+idempotency, and functional Kafka mTLS validation workflows.
 
 ## Objectives
 
@@ -35,7 +41,7 @@ The platform is designed to demonstrate practical experience with:
 | Strimzi | Kafka operation in Kubernetes |
 | GitHub Actions | Continuous validation |
 | Git | Desired-state source |
-| GHCR | Application image registry in a later phase |
+| GHCR | Demo application image registry |
 
 ## Cluster Topology
 
@@ -65,7 +71,7 @@ Application workloads are not deployed directly from GitHub Actions.
 Terraform is responsible for bootstrap infrastructure and does not become a
 second owner of workloads managed by Argo CD.
 
-## Planned Delivery Flow
+## Delivery Flow
 
 Developer change
 -> Pull Request
@@ -80,22 +86,28 @@ Developer change
     ├── .github/
     │   └── workflows/
     ├── app/
+    │   └── demo-api/
     ├── charts/
     │   └── demo-api/
     ├── docs/
-    │   └── adr/
+    │   ├── adr/
+    │   ├── validation/
+    │   └── REPRODUCIBILITY.md
     ├── gitops/
     │   ├── applications/
-    │   └── environments/
-    │       └── dev/
+    │   ├── environments/
+    │   │   └── dev/
+    │   └── projects/
     ├── kind/
+    │   └── cluster.yaml
     ├── platform/
     │   ├── argocd/
     │   └── kafka/
     ├── scripts/
     ├── terraform/
     │   └── bootstrap/
-    └── tests/
+    ├── tests/
+    └── Makefile
 
 ## Engineering Principles
 
@@ -114,6 +126,10 @@ Architecture decisions are stored under `docs/adr/`.
 
 The initial architecture decision is documented in
 `docs/adr/ADR-001-platform-architecture.md`.
+
+The secure clean-environment bootstrap, credential lifecycle,
+idempotency behavior, validation workflow, and reproducibility model are
+documented in [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md).
 
 ## Scope
 
