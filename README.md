@@ -1,5 +1,7 @@
 # Kubernetes GitOps Platform
 
+**Core technologies:** Kubernetes · kind · Argo CD · Helm · Terraform · Docker · GitHub Actions · GHCR · Strimzi · Kafka
+
 A greenfield portfolio implementation of a Kubernetes platform focused on
 GitOps reconciliation, Infrastructure as Code, application packaging,
 platform automation, and declarative operations.
