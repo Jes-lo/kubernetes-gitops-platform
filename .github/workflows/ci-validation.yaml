@@ -167,6 +167,32 @@ jobs:
 
           echo "Runtime image user: $IMAGE_USER"
 
+      - name: Report demo API image vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: demo-api:ci
+          format: table
+          exit-code: '0'
+          severity: HIGH,CRITICAL
+          vuln-type: os,library
+          hide-progress: true
+          version: v0.74.0
+
+      - name: Enforce fixable HIGH/CRITICAL image vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: demo-api:ci
+          format: table
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          vuln-type: os,library
+          hide-progress: true
+          version: v0.74.0
+          skip-setup-trivy: true
+
       - name: Run hardened container smoke test
         shell: bash
         run: |
